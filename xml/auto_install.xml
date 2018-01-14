@@ -4,7 +4,7 @@
   <CustomGroups>
     <CustomGroup>
       <name>Googlegroup_Settings</name>
-      <title>Googlegroup Settings</title>
+      <title>Google Group Settings</title>
       <extends>Group</extends>
       <style>Inline</style>
       <collapse_display>0</collapse_display>
@@ -21,8 +21,8 @@
   </CustomGroups>
   <CustomFields>
     <CustomField>
-      <name>Googlegroup_Group</name>
-      <label>Googlegroup Group</label>
+      <name>Google_Group</name>
+      <label>Google Groups</label>
       <data_type>String</data_type>
       <html_type>Text</html_type>
       <is_required>0</is_required>

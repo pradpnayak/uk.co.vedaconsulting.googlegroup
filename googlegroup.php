@@ -3,8 +3,6 @@
 require_once 'googlegroup.civix.php';
 require_once 'google-api-php-client/src/Google/autoload.php';
 set_include_path(get_include_path() . PATH_SEPARATOR . 'google-api-php-client/src');
-define('GOOGLE_CLIENT_KEY', '');
-define('GOOGLE_SECERT_KEY', '');
 
 /**
  * Implements hook_civicrm_config().
@@ -33,20 +31,9 @@ function googlegroup_civicrm_xmlMenu(&$files) {
  */
 function googlegroup_civicrm_install() {
   $extensionDir       = dirname( __FILE__ ) . DIRECTORY_SEPARATOR;
-  $customDataXMLFile  = $extensionDir  . '/xml/auto_install.xml';
-  $import = new CRM_Utils_Migrate_Import( );
-  $import->run( $customDataXMLFile );
-  
-  $params = array(
-    'sequential' => 1,
-    'name'          => 'Google Group Sync',
-    'description'   => 'Sync contacts between CiviCRM and Google Group',
-    'run_frequency' => 'Daily',
-    'api_entity'    => 'Googlegroup',
-    'api_action'    => 'sync',
-    'is_active'     => 0,
-  );
-  $result = civicrm_api3('job', 'create', $params);
+  $customDataXMLFile  = $extensionDir . '/xml/auto_install.xml';
+  $import = new CRM_Utils_Migrate_Import();
+  $import->run($customDataXMLFile);
   _googlegroup_civix_civicrm_install();
 }
 
@@ -56,15 +43,6 @@ function googlegroup_civicrm_install() {
  * @link http://wiki.civicrm.org/confluence/display/CRMDOC/hook_civicrm_uninstall
  */
 function googlegroup_civicrm_uninstall() {
-  CRM_Core_DAO::executeQuery("
-    DROP TABLE IF EXISTS civicrm_value_googlegroup_settings");
-   CRM_Core_DAO::executeQuery("
-    DELETE cf.* 
-    FROM civicrm_custom_field cf
-    INNER JOIN civicrm_custom_group cg on cf.custom_group_id = cg.id
-    where cg.name = 'Googlegroup_Settings'");
-  CRM_Core_DAO::executeQuery("
-    DELETE FROM civicrm_custom_group where name = 'Googlegroup_Settings'");
   _googlegroup_civix_civicrm_uninstall();
 }
 
@@ -111,6 +89,21 @@ function googlegroup_civicrm_upgrade($op, CRM_Queue_Queue $queue = NULL) {
  * @link http://wiki.civicrm.org/confluence/display/CRMDOC/hook_civicrm_managed
  */
 function googlegroup_civicrm_managed(&$entities) {
+  $entities = [
+    'name' => 'Google Group Sync',
+    'entity' => 'Job',
+    'update' => 'never',
+    'params' => [
+      'version' => 3,
+      'name' => 'Google Group Sync',
+      'description' => 'Sync contacts between CiviCRM and Google Group.',
+      'run_frequency' => 'Daily',
+      'api_entity' => 'Googlegroup',
+      'api_action' => 'sync',
+      'parameters' => '',
+      'is_acitve' => FALSE,
+    ],
+  ];
   _googlegroup_civix_civicrm_managed($entities);
 }
 
@@ -138,7 +131,7 @@ function googlegroup_civicrm_caseTypes(&$caseTypes) {
  * @link http://wiki.civicrm.org/confluence/display/CRMDOC/hook_civicrm_caseTypes
  */
 function googlegroup_civicrm_angularModules(&$angularModules) {
-_googlegroup_civix_civicrm_angularModules($angularModules);
+  _googlegroup_civix_civicrm_angularModules($angularModules);
 }
 
 /**
@@ -150,101 +143,158 @@ function googlegroup_civicrm_alterSettingsFolders(&$metaDataFolders = NULL) {
   _googlegroup_civix_civicrm_alterSettingsFolders($metaDataFolders);
 }
 
-function googlegroup_civicrm_pageRun( &$page ) {
-  if ($page->getVar('_name') == 'CRM_Group_Page_Group') {
-    $params = array(
-      'version' => 3,
-      'sequential' => 1,
-    );
-    // Get all the google groups and pass it to template as JS array
-    // To reduce the no. of AJAX calls to get the group name in Group Listing Page
-    $result = civicrm_api('Googlegroup', 'getgroups', $params);
-    if(!$result['is_error']){
-    $groups = json_encode($result['values']);
-    $page->assign('lists_and_groups', $groups);
-   }
-  }
-}
-
-function googlegroup_civicrm_buildForm($formName, &$form) {
-  if ($formName == 'CRM_Group_Form_Edit' AND ($form->getAction() == CRM_Core_Action::ADD OR $form->getAction() == CRM_Core_Action::UPDATE)) {
-    // Get all the Mailchimp lists
-    $lists = array();
-    $defaults = array();
-    $params = array(
-      'version' => 3,
-      'sequential' => 1,
-    );
-    
-    $lists = civicrm_api('Googlegroup', 'getgroups', $params);
-    if (!empty($lists['values'])) {
-      $form->add('select', 'google_group', ts('Google Group'), array('' => '- select -') + $lists['values'], FALSE );
-      $templatePath = realpath(dirname(__FILE__)."/templates/CRM/Group/Form");
-      CRM_Core_Region::instance('page-body')->add(array('template' => "{$templatePath}/Edit.extra.tpl"));
-
-      $groupId = $form->getVar('_id');
-      if ($form->getAction() == CRM_Core_Action::UPDATE AND !empty($groupId)) {
-        $ggDetails  = CRM_Googlegroup_Utils::getGroupsToSync(array($groupId));
-
-        if (!empty($ggDetails)) {
-          $defaults['google_group'] = $ggDetails[$groupId]['group_id'];
-        }
+/**
+ * Implements hook_civicrm_fieldOptions().
+ *
+ * @link http://wiki.civicrm.org/confluence/display/CRMDOC/hook_civicrm_fieldOptions
+ *
+ */
+function googlegroup_civicrm_fieldOptions($entity, $field, &$options, $params) {
+  if ('Group' == $entity) {
+    $id = str_replace('custom_', '', $field);
+    if (!is_numeric($id)) {
+      return NULL;
+    }
+    $customFieldId = civicrm_api3('CustomField', 'getvalue', [
+      'return' => "id",
+      'name' => "Googlegroup_Group",
+      'custom_group_id.name' => "Googlegroup_Settings",
+    ]);
+    if ($customFieldId == $id) {
+      $lists = civicrm_api('Googlegroup', 'getgroups', []);
+      $options = [];
+      if (!empty($lists['values'])) {
+        $options = ['' => '- select -'] + $lists['values'];
       }
-      $form->setDefaults($defaults);  
-    }
-
-  }
-}
-
-function googlegroup_civicrm_validateForm( $formName, &$fields, &$files, &$form, &$errors ) {
-  if ($formName != 'CRM_Group_Form_Edit' ) {
-    return;
-  }
-  
-  if (!empty($fields['google_group'])) {
-    $otherGroups = CRM_Googlegroup_Utils::getGroupsToSync(array(), $fields['google_group']);
-    $thisGroup = $form->getVar('_group');
-    if ($thisGroup && $otherGroups) {
-      unset($otherGroups[$thisGroup->id]);
-    }
-    if (!empty($otherGroups)) {
-      $otherGroup = reset($otherGroups);
-      $errors['google_group'] = ts('There is already a CiviCRM group tracking this Group, called "'
-        . $otherGroup['civigroup_title'].'"');
     }
   }
 }
 
-function googlegroup_civicrm_navigationMenu(&$params){
-  $parentId = CRM_Core_DAO::getFieldValue('CRM_Core_DAO_Navigation', 'Mailings', 'id', 'name');
-  $googlegroupSettings  = CRM_Core_DAO::getFieldValue('CRM_Core_DAO_Navigation', 'Googlegroup_Settings', 'id', 'name');
-  $googlegroupSync      = CRM_Core_DAO::getFieldValue('CRM_Core_DAO_Navigation', 'Googlegroup_Sync', 'id', 'name');
-  $maxId                = max(array_keys($params));
-  $googlegroupMaxId     = empty($googlegroupSettings) ? $maxId+1             : $googlegroupSettings;
-  $googlegroupsyncId    = empty($googlegroupSync)     ? $googlegroupMaxId+1  : $googlegroupSync;
+/**
+ * Implements hook_civicrm_validateForm().
+ *
+ * @link http://wiki.civicrm.org/confluence/display/CRMDOC/hook_civicrm_validateForm
+ *
+ */
+function googlegroup_civicrm_validateForm($formName, &$fields, &$files, &$form, &$errors) {
+  if ($formName == 'CRM_Group_Form_Edit' ) {
+    if (!empty($fields['google_group'])) {
+      $otherGroups = CRM_Googlegroup_Utils::getGroupsToSync($fields['google_group']);
+      $thisGroup = $form->getVar('_group');
+      if ($thisGroup && $otherGroups) {
+        unset($otherGroups[$thisGroup->id]);
+      }
+      if (!empty($otherGroups)) {
+        $otherGroup = reset($otherGroups);
+        $errors['google_group'] = ts('There is already a CiviCRM group tracking this Group, called "'
+          . $otherGroup['civigroup_title'] . '"');
+      }
+    }
+  }
+}
 
-  $params[$parentId]['child'][$googlegroupMaxId] = array(
-        'attributes' => array(
-          'label'     => ts('Googlegroup Settings'),
-          'name'      => 'Googlegroup_Settings',
-          'url'       => CRM_Utils_System::url('civicrm/googlegroup/settings', 'reset=1', TRUE),
-          'active'    => 1,
-          'parentID'  => $parentId,
-          'operator'  => NULL,
-          'navID'     => $googlegroupMaxId,
-          'permission'=> 'administer CiviCRM',
-        ),
-  );
-  $params[$parentId]['child'][$googlegroupsyncId] = array(
-        'attributes' => array(
-          'label'     => ts('Sync Civi Contacts To Googlegroup'),
-          'name'      => 'Googlegroup_Sync',
-          'url'       => CRM_Utils_System::url('civicrm/googlegroup/sync', 'reset=1', TRUE),
-          'active'    => 1,
-          'parentID'  => $parentId,
-          'operator'  => NULL,
-          'navID'     => $googlegroupsyncId,
-          'permission'=> 'administer CiviCRM',
-        ),
-  );
+/**
+ * Implements hook_civicrm_navigationMenu().
+ *
+ * @link http://wiki.civicrm.org/confluence/display/CRMDOC/hook_civicrm_navigationMenu
+ *
+ */
+function googlegroup_civicrm_navigationMenu(&$menu) {
+  _googlegroup_civix_insert_navigation_menu($menu, 'Administer/System Settings', [
+    'label' => ts('Googlegroup Settings', ['domain' => 'uk.co.vedaconsulting.googlegroup']),
+    'name' => 'Googlegroup_Settings',
+    'url' => CRM_Utils_System::url('civicrm/googlegroup/settings', 'reset=1', TRUE),
+    'active' => 1,
+    'operator' => NULL,
+    'permission' => 'administer CiviCRM',
+  ]);
+  _googlegroup_civix_insert_navigation_menu($menu, 'Contacts', [
+    'label' => ts('Sync Civi Contacts To Googlegroup', ['domain' => 'uk.co.vedaconsulting.googlegroup']),
+    'name' => 'Googlegroup_Sync',
+    'url' => CRM_Utils_System::url('civicrm/googlegroup/sync', 'reset=1', TRUE),
+    'active' => 1,
+    'operator' => NULL,
+    'permission' => 'administer CiviCRM',
+  ]);
+}
+
+/**
+ * Implements hook_civicrm_alterSettingsMetaData().
+ *
+ * @link http://wiki.civicrm.org/confluence/display/CRMDOC/hook_civicrm_alterSettingsMetaData
+ *
+ */
+function googlegroup_civicrm_alterSettingsMetaData(&$settingsMetadata, $domainID, $profile) {
+  $settingsMetadata['cg_client_key'] = [
+    'group_name' => 'Googlegroup Preferences',
+    'group' => 'core',
+    'name' => 'cg_client_key',
+    'type' => 'String',
+    'html_type' => 'text',
+    'quick_form_type' => 'Element',
+    'default' => '',
+    'add' => '4.7',
+    'title' => ts('Client Key'),
+    'is_domain' => 1,
+    'is_contact' => 0,
+    'description' => '',
+    'help_text' => '',
+    'html_attributes' => [
+      'size' => 48,
+    ],
+  ];
+  $settingsMetadata['cg_client_secret'] = [
+    'group_name' => 'Googlegroup Preferences',
+    'group' => 'core',
+    'name' => 'cg_client_secret',
+    'type' => 'String',
+    'html_type' => 'text',
+    'quick_form_type' => 'Element',
+    'default' => '',
+    'add' => '4.7',
+    'title' => ts('Client Secret'),
+    'is_domain' => 1,
+    'is_contact' => 0,
+    'description' => '',
+    'help_text' => '',
+    'html_attributes' => [
+      'size' => 48,
+    ],
+  ];
+  $settingsMetadata['cg_domain_name'] = [
+    'group_name' => 'Googlegroup Preferences',
+    'group' => 'core',
+    'name' => 'cg_domain_name',
+    'type' => 'String',
+    'html_type' => 'text',
+    'quick_form_type' => 'Element',
+    'default' => '',
+    'add' => '4.7',
+    'title' => ts('Domain names'),
+    'is_domain' => 1,
+    'is_contact' => 0,
+    'description' => '',
+    'help_text' => '',
+    'html_attributes' => [
+      'size' => 48,
+    ],
+  ];
+  $settingsMetadata['cg_access_token'] = [
+    'group_name' => 'Googlegroup Preferences',
+    'group' => 'core',
+    'name' => 'cg_access_token',
+    'type' => 'String',
+    'html_type' => 'text',
+    'quick_form_type' => 'Element',
+    'default' => '',
+    'add' => '4.7',
+    'title' => ts('Access Token'),
+    'is_domain' => 1,
+    'is_contact' => 0,
+    'description' => '',
+    'help_text' => '',
+    'html_attributes' => [
+      'size' => 48,
+    ],
+  ];
 }
