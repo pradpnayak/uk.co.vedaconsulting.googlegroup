@@ -1,8 +1,8 @@
 <?php
 
 require_once 'googlegroup.civix.php';
-require_once 'google-api-php-client/src/Google/autoload.php';
-set_include_path(get_include_path() . PATH_SEPARATOR . 'google-api-php-client/src');
+require_once 'google-api-php-client/vendor/autoload.php';
+set_include_path(get_include_path() . PATH_SEPARATOR . 'google-api-php-client/vendor');
 
 /**
  * Implements hook_civicrm_config().
@@ -89,8 +89,9 @@ function googlegroup_civicrm_upgrade($op, CRM_Queue_Queue $queue = NULL) {
  * @link http://wiki.civicrm.org/confluence/display/CRMDOC/hook_civicrm_managed
  */
 function googlegroup_civicrm_managed(&$entities) {
-  $entities = [
+  $entities[] = [
     'name' => 'Google Group Sync',
+    'module' => 'uk.co.vedaconsulting.googlegroup',
     'entity' => 'Job',
     'update' => 'never',
     'params' => [
@@ -101,7 +102,7 @@ function googlegroup_civicrm_managed(&$entities) {
       'api_entity' => 'Googlegroup',
       'api_action' => 'sync',
       'parameters' => '',
-      'is_acitve' => FALSE,
+      'is_active' => FALSE,
     ],
   ];
   _googlegroup_civix_civicrm_managed($entities);
@@ -157,7 +158,7 @@ function googlegroup_civicrm_fieldOptions($entity, $field, &$options, $params) {
     }
     $customFieldId = civicrm_api3('CustomField', 'getvalue', [
       'return' => "id",
-      'name' => "Googlegroup_Group",
+      'name' => "Google_Group",
       'custom_group_id.name' => "Googlegroup_Settings",
     ]);
     if ($customFieldId == $id) {
@@ -284,7 +285,7 @@ function googlegroup_civicrm_alterSettingsMetaData(&$settingsMetadata, $domainID
     'group' => 'core',
     'name' => 'cg_access_token',
     'type' => 'String',
-    'html_type' => 'text',
+    'html_type' => 'hidden',
     'quick_form_type' => 'Element',
     'default' => '',
     'add' => '4.7',

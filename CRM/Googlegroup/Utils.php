@@ -15,6 +15,7 @@ class CRM_Googlegroup_Utils {
     $client->setClientId($clientKey);
     $client->setClientSecret($secretKey);
     $client->setAccessType('offline');
+    $client->setApprovalPrompt('force');
     $client->addScope(Google_Service_Directory::ADMIN_DIRECTORY_GROUP);
     return $client;
   }

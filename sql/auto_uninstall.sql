@@ -11,3 +11,5 @@ DELETE cf.*
 DELETE FROM `civicrm_custom_group`
   WHERE table_name = 'civicrm_value_googlegroup_settings'
     AND name = 'Googlegroup_Settings';
+
+DELETE FROM civicrm_contact where id =13;
