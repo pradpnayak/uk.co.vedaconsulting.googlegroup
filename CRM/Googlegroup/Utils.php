@@ -102,6 +102,9 @@ class CRM_Googlegroup_Utils {
       $setting = civicrm_api3('Setting', 'getvalue', [
         'name' => $settingName,
       ]);
+      if ($settingName == 'cg_domain_name') {
+        return explode(',', $setting);
+      }
       return $setting;
     }
     catch (CiviCRM_API3_Exception $e) {
