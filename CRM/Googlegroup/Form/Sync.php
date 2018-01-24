@@ -281,7 +281,7 @@ class CRM_Googlegroup_Form_Sync extends CRM_Core_Form {
     // Cheekily access the database directly to obtain a prepared statement.
     $db = $dao->getDatabaseConnection();
     $insert = $db->prepare('INSERT INTO tmp_googlegroup_push_g VALUES(?, ?)');
-    $googleGroupMembers = civicrm_api('Googlegroup', 'getmembers', [
+    $googleGroupMembers = civicrm_api3('Googlegroup', 'getmembers', [
       'group_id' => $groupID,
     ]);
     foreach ($googleGroupMembers['values'] as $memberId => $memberEmail) {

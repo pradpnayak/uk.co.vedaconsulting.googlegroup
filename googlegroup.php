@@ -162,7 +162,7 @@ function googlegroup_civicrm_fieldOptions($entity, $field, &$options, $params) {
       'custom_group_id.name' => "Googlegroup_Settings",
     ]);
     if ($customFieldId == $id) {
-      $lists = civicrm_api('Googlegroup', 'getgroups', []);
+      $lists = civicrm_api3('Googlegroup', 'getgroups', []);
       $options = [];
       if (!empty($lists['values'])) {
         $options = ['' => '- select -'] + $lists['values'];

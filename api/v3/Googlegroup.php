@@ -30,15 +30,16 @@ function civicrm_api3_googlegroup_getgroups($params) {
     if (!empty($domains)) {
       foreach ($domains as $domain) {
         try {
-	        $pageToken = "";
+          $pageToken = "";
         	do {
-        	  $optParams = ['domain' => trim($domain), 'pageToken' => $pageToken];
-        	  $results = $service->groups->listGroups($optParams);
-        	  foreach($results->getGroups() as $result) {
-        	    $groups[$result['id']] = "{$domain}:{$result['name']}::{$result['email']}";
+            $optParams = ['domain' => trim($domain), 'pageToken' => $pageToken];
+            $results = $service->groups->listGroups($optParams);
+
+            foreach($results->getGroups() as $result) {
+              $groups[$result['id']] = "{$domain}:{$result['name']}::{$result['email']}";
             }
-      	    $pageToken = $results->nextPageToken;
-      	  }
+            $pageToken = $results->nextPageToken;
+          }
           while($pageToken);
         }
         catch (Exception $e) {
